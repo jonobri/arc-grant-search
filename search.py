@@ -1,10 +1,4 @@
 #!/usr/bin/env python
-# /// script
-# requires-python = ">=3.12"
-# dependencies = [
-#     "requests",
-# ]
-# ///
 import argparse
 import csv
 import json
@@ -41,55 +35,60 @@ class ARCGrantsAPI:
         two_digit_for=None,
     ):
         """Build filter query string based on provided parameters."""
-        filter_parts = []
+        filter_params = []
 
         # Start with search text
-        filter_query = search_text or ""
+        query_text = search_text or ""
 
-        # Add filters
+        # Build individual filter expressions
         if scheme:
-            filter_parts.append(f'scheme="{scheme}"')
+            filter_params.append(f'(scheme="{scheme}")')
 
         if admin_org:
-            filter_parts.append(f'admin-org-name="{admin_org}"')
+            filter_params.append(f'(admin-org-name="{admin_org}")')
 
         if admin_org_short:
-            filter_parts.append(f'admin-org-short-name="{admin_org_short}"')
+            filter_params.append(f'(admin-org-short-name="{admin_org_short}")')
 
         if status:
-            filter_parts.append(f'status="{status}"')
+            filter_params.append(f'(status="{status}")')
 
         if year_from:
-            filter_parts.append(f'year-from="{year_from}"')
+            filter_params.append(f'(year-from="{year_from}")')
 
         if year_to:
-            filter_parts.append(f'year-to="{year_to}"')
+            filter_params.append(f'(year-to="{year_to}")')
 
         if funding_from:
-            filter_parts.append(f'funding-from="{funding_from}"')
+            filter_params.append(f'(funding-from="{funding_from}")')
 
         if funding_to:
-            filter_parts.append(f'funding-to="{funding_to}"')
+            filter_params.append(f'(funding-to="{funding_to}")')
 
         if fellowships_only:
-            filter_parts.append(f'fellowships-only="{fellowships_only}"')
+            filter_params.append(f'(fellowships-only="{fellowships_only}")')
 
         if lief_register:
-            filter_parts.append(f'lief-register="{lief_register}"')
+            filter_params.append(f'(lief-register="{lief_register}")')
 
         if four_digit_for:
-            filter_parts.append(f'four-digit-for="{four_digit_for}"')
+            filter_params.append(f'(four-digit-for="{four_digit_for}")')
 
         if two_digit_for:
-            filter_parts.append(f'two-digit-for="{two_digit_for}"')
+            filter_params.append(f'(two-digit-for="{two_digit_for}")')
 
-        # Combine filters with AND if both search text and filters exist
-        if filter_query and filter_parts:
-            return f"{filter_query} => ({' AND '.join(filter_parts)})"
-        elif filter_parts:
-            return f"=> ({' AND '.join(filter_parts)})"
+        # Combine all filters with AND operators (no spaces)
+        if filter_params:
+            # Join without spaces between AND and next parameter
+            filter_expression = "AND".join(filter_params)
+
+            # For exactly matching your example URL format
+            if query_text:
+                return f"{query_text} => {filter_expression}"
+            else:
+                return f"{filter_expression}"  # Removed the "=>" if no search text
         else:
-            return filter_query
+            return query_text
 
     def fetch_grants(self, filter_query=None, page_size=100, max_pages=None):
         """
@@ -110,37 +109,46 @@ class ARCGrantsAPI:
         print(f"Fetching data from ARC Grants API...")
 
         while True:
-            # Build query parameters
-            params = {
-                "page[size]": min(page_size, 1000),  # API limit is 1000
-                "page[number]": page,
-            }
+            # Construct URL manually
+            url = f"{self.BASE_URL}?page%5Bsize%5D={min(page_size, 1000)}&page%5Bnumber%5D={page}"
 
             if filter_query:
-                params["filter"] = filter_query
+                # Custom encoding for the filter parameter
+                # Encode only specific characters that need encoding
+                encoded_filter = filter_query.replace(" ", "%20")
+                encoded_filter = encoded_filter.replace('"', "%22")
+                encoded_filter = encoded_filter.replace("(", "%28")
+                encoded_filter = encoded_filter.replace(")", "%29")
+                encoded_filter = encoded_filter.replace("=", "%3D")
+                encoded_filter = encoded_filter.replace(">", "%3E")
+                url = f"{url}&filter={encoded_filter}"
 
-            # Encode URL
-            encoded_params = urllib.parse.urlencode(params)
-            url = f"{self.BASE_URL}?{encoded_params}"
+            print(f"Request URL: {url}")
 
-            # Make request
+            # Make request with the manually constructed URL
             try:
                 response = requests.get(url)
                 response.raise_for_status()
                 data = response.json()
             except requests.RequestException as e:
                 print(f"Error fetching page {page}: {e}")
-                if response.status_code in (401, 403):
-                    print("Authentication error or API access denied.")
-                elif response.status_code == 500:
-                    print("Server error. Check your query parameters.")
-                else:
-                    print(f"HTTP error: {response.status_code}")
+                if hasattr(response, "status_code"):
+                    if response.status_code in (401, 403):
+                        print("Authentication error or API access denied.")
+                    elif response.status_code == 500:
+                        print("Server error. Check your query parameters.")
+                        if hasattr(response, "text"):
+                            print(f"Response: {response.text[:500]}...")
+                    else:
+                        print(f"HTTP error: {response.status_code}")
                 break
 
             # Process results
             if "data" not in data:
                 print("No data found in response.")
+                print(
+                    f"Response: {json.dumps(data, indent=2)[:500]}..."
+                )  # Print truncated response
                 break
 
             # Add results to our collection
@@ -334,6 +342,9 @@ def main():
     parser.add_argument("--csv", help="CSV output filename")
     parser.add_argument("--sqlite", help="SQLite output filename")
 
+    # Debugging option
+    parser.add_argument("--debug", action="store_true", help="Show debug information")
+
     args = parser.parse_args()
 
     # Create timestamp for default filenames
@@ -372,6 +383,8 @@ def main():
     # Fetch data
     if filter_query:
         print(f"Using filter query: {filter_query}")
+    else:
+        print("No filters applied - fetching all grants")
 
     api.fetch_grants(
         filter_query=filter_query, page_size=args.page_size, max_pages=args.max_pages
