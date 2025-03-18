@@ -4,11 +4,11 @@ A Python script for querying the Australian Research Council's API and returning
 
 ## Installation
 
-The project was built using [uv](https://github.com/astral-sh/uv) to manage dependencies and other project metadata. The project is initialised with a `pyproject.toml` file, which is used to manage dependencies and other project metadata.
+The project was built using [uv](https://github.com/astral-sh/uv) to manage dependencies and other project metadata.
 
 ## Usage
 
-This project uses the [ARC Grants API](https://dataportal.arc.gov.au/NCGP/Web/Grant/Help) to search for grants.
+This project uses the [ARC Grants API](https://dataportal.arc.gov.au/NCGP/Web/Grant/Help) to search for grants. This can be used to understand the ARC's funding priorities over the recent past.
 
 Results are returned in CSV and SQLite formats.
 

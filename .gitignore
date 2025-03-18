@@ -175,3 +175,10 @@ cython_debug/
 
 # Project-specific
 results/*
+
+# dev files
+
+query.txt
+
+# MacOS files
+*.DS_Store
